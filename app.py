@@ -16,69 +16,86 @@ from sklearn.preprocessing import MinMaxScaler
 st.set_page_config(
     page_title="E-commerce Analytics",
     layout="wide",
-    page_icon="🚀"
+    page_icon="📊"
 )
 
 # =========================
-# STYLE 
+# POWER BI STYLE CSS
 # =========================
 st.markdown("""
 <style>
-body {
-    background-color: #0E1117;
-}
 
-/* Card KPI */
-.metric-card {
-    background: linear-gradient(135deg, #1f2937, #111827);
-    padding: 20px;
-    border-radius: 15px;
-    text-align: center;
-    color: white;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-}
-
-.metric-card h2 {
-    font-size: 28px;
-}
-
-/* Button */
-.stButton>button {
-    border-radius: 10px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
-    color: white;
-    border: none;
+/* Background */
+.main {
+    background-color: #0B0F19;
 }
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #111827, #020617);
+}
+
+/* KPI CARD */
+.metric-card {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    padding: 25px;
+    border-radius: 18px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.5);
+    transition: 0.3s;
+}
+
+.metric-card:hover {
+    transform: scale(1.05);
+}
+
+/* Titles */
+h1, h2, h3 {
+    color: white;
+}
+
+/* Button */
+.stButton>button {
+    border-radius: 12px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    font-weight: bold;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"] {
     background-color: #111827;
 }
+
+/* Divider */
+hr {
+    border: 1px solid #1f2937;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# LOAD DATA & PIPELINE 
+# LOAD DATA & PIPELINE
 # =========================
 @st.cache_data
 def load_data():
     return pd.read_csv("cleaned_data_small.csv")
 
-@st.cache_resource
-def load_pipeline():
-    return joblib.load("pipeline.pkl")
-
 df = load_data()
-pipeline = load_pipeline()
+
 
 # =========================
-# SIDEBAR 
+# SIDEBAR
 # =========================
-st.sidebar.markdown("## 🚀 E-commerce App")
+st.sidebar.markdown("# 🚀 E-commerce")
+st.sidebar.markdown("### Analytics Dashboard")
 st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
-    "Chọn chức năng",
+    "",
     [
         "📊 Dashboard",
         "👥 Segmentation",
@@ -90,12 +107,13 @@ menu = st.sidebar.radio(
 )
 
 # =========================
-# DASHBOARD 
+# DASHBOARD (POWER BI)
 # =========================
 if menu == "📊 Dashboard":
 
     st.title("📊 E-commerce Dashboard")
 
+    # KPI ROW
     col1, col2, col3 = st.columns(3)
 
     col1.markdown(f"""
@@ -119,21 +137,35 @@ if menu == "📊 Dashboard":
     </div>
     """, unsafe_allow_html=True)
 
-    st.divider()
+    st.markdown("### 📈 Sales Analysis")
 
-    category_filter = st.selectbox("Chọn Category", df["product_category_name_english"].unique())
+    # FILTER
+    category_filter = st.selectbox("📦 Product Category", df["product_category_name_english"].unique())
     df_filtered = df[df["product_category_name_english"] == category_filter]
 
-    fig = px.bar(
-        df_filtered.groupby("product_id")["payment_value"].sum().head(10),
-        title="Top Products"
-    )
-    fig.update_layout(template="plotly_dark")
+    # CHART GRID
+    colA, colB = st.columns(2)
 
-    st.plotly_chart(fig, use_container_width=True)
+    with colA:
+        fig1 = px.bar(
+            df_filtered.groupby("product_id")["payment_value"].sum().head(10),
+            title="Top Products",
+            color_discrete_sequence=["#6366f1"]
+        )
+        fig1.update_layout(template="plotly_dark")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with colB:
+        fig2 = px.histogram(
+            df_filtered,
+            x="payment_value",
+            title="Revenue Distribution"
+        )
+        fig2.update_layout(template="plotly_dark")
+        st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# SEGMENTATION 
+# SEGMENTATION
 # =========================
 elif menu == "👥 Segmentation":
 
@@ -151,7 +183,7 @@ elif menu == "👥 Segmentation":
     scaler = MinMaxScaler()
     X = scaler.fit_transform(rfm[["Recency","Frequency","Monetary"]])
 
-    k = st.slider("Clusters", 2, 8, 4)
+    k = st.slider("🎛️ Number of Clusters", 2, 8, 4)
 
     model = KMeans(n_clusters=k, random_state=42)
     rfm["cluster"] = model.fit_predict(X)
@@ -161,29 +193,31 @@ elif menu == "👥 Segmentation":
         x="Frequency",
         y="Monetary",
         color="cluster",
-        title="Customer Segmentation"
+        title="Customer Segments",
+        color_continuous_scale="viridis"
     )
     fig.update_layout(template="plotly_dark")
 
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("### 📊 Cluster Summary")
     st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
 
 # =========================
-# RECOMMENDATION 
+# RECOMMENDATION
 # =========================
 elif menu == "🎯 Recommendation":
 
     st.title("🎯 Product Recommendation")
 
-    user_id = st.text_input("Nhập Customer ID")
+    user_id = st.text_input("👤 Enter Customer ID")
 
     if user_id:
 
         data = df[["customer_unique_id","product_id","review_score"]].dropna()
 
         if user_id not in data["customer_unique_id"].astype(str).values:
-            st.warning("Cold start → Recommend popular")
+            st.warning("Cold start → Showing popular products")
 
             popular = df.groupby("product_id")["review_score"].count().sort_values(ascending=False).head(10)
             st.dataframe(popular)
@@ -193,11 +227,11 @@ elif menu == "🎯 Recommendation":
             st.dataframe(rec)
 
 # =========================
-# MARKET BASKET 
+# MARKET BASKET
 # =========================
 elif menu == "🛍️ Market Basket":
 
-    st.title("🛍️ Market Basket")
+    st.title("🛍️ Market Basket Analysis")
 
     try:
         rules = pd.read_csv("rules.csv")
@@ -207,7 +241,8 @@ elif menu == "🛍️ Market Basket":
             x="support",
             y="confidence",
             size="lift",
-            color="lift"
+            color="lift",
+            title="Association Rules"
         )
         fig.update_layout(template="plotly_dark")
 
@@ -216,14 +251,14 @@ elif menu == "🛍️ Market Basket":
         st.dataframe(rules.head(20))
 
     except:
-        st.error("Chưa có rules.csv")
+        st.error("rules.csv not found")
 
 # =========================
-# PREDICTION 
+# PREDICTION
 # =========================
 elif menu == "🔮 Prediction":
 
-    st.title("🔮 Predict Customer Satisfaction")
+    st.title("🔮 Customer Satisfaction Prediction")
 
     col1, col2, col3 = st.columns(3)
 
@@ -234,8 +269,7 @@ elif menu == "🔮 Prediction":
     payment_type = st.selectbox("Payment Type", df["payment_type"].unique())
 
     if st.button("Predict"):
-
-        with st.spinner("Predicting..."):
+        with st.spinner("Analyzing..."):
 
             input_df = pd.DataFrame({
                 "price": [price],
@@ -253,13 +287,13 @@ elif menu == "🔮 Prediction":
                 st.success(f"Prediction: {pred[0]}")
 
 # =========================
-# ADMIN 
+# ADMIN
 # =========================
 elif menu == "⚙️ Admin":
 
     st.title("⚙️ Admin Panel")
 
-    st.info("Upload dataset mới để retrain model")
+    st.info("Upload dataset to retrain model")
 
     file = st.file_uploader("Upload CSV")
 
@@ -275,4 +309,4 @@ elif menu == "⚙️ Admin":
             pipeline.fit(X, y)
             joblib.dump(pipeline, "pipeline.pkl")
 
-            st.success("Model updated!")
+            st.success("Model retrained successfully!")
