@@ -54,7 +54,7 @@ menu = st.sidebar.radio(
         "👥 Segmentation",
         "🎯 Recommendation",
         "🛍️ Market Basket",
-        "🔮 Prediction"
+        "🔮 Prediction",
         "⚙️ Admin"
     ]
 )
