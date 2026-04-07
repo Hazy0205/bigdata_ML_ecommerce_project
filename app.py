@@ -84,8 +84,15 @@ hr {
 def load_data():
     return pd.read_csv("data/cleaned_data_small.csv")
 
-df = load_data()
+@st.cache_resource
+def load_pipeline():
+    try:
+        return joblib.load("pipeline.pkl")
+    except:
+        from sklearn.ensemble import RandomForestClassifier
+        return RandomForestClassifier()
 
+df = load_data()
 
 # =========================
 # SIDEBAR
@@ -303,10 +310,12 @@ elif menu == "⚙️ Admin":
 
         if st.button("Retrain"):
 
-            X = new_df[["price","freight_value","payment_value","payment_type"]]
-            y = new_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
+          try:
+           X = new_df[["price","freight_value","payment_value","payment_type"]]
+           y = new_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
+ 
+           pipeline.fit(X, y)
 
-            pipeline.fit(X, y)
-            joblib.dump(pipeline, "pipeline.pkl")
-
-            st.success("Model retrained successfully!")
+           st.success("Model retrained!")
+        except Exception as e:
+         st.error(f"Lỗi retrain: {e}") 
