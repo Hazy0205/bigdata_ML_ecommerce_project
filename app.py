@@ -10,6 +10,7 @@ import plotly.express as px
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.utils import resample
+from sklearn.ensemble import RandomForestRegressor
 
 # =========================
 # CONFIG
@@ -131,49 +132,52 @@ elif menu == "👥 Segmentation":
     st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
 
 # =========================
-# RECOMMENDATION
+# RECOMMENDATION (FIXED)
 # =========================
 elif menu == "🎯 Recommendation":
+
     st.title("🎯 Recommendation Product")
 
-    from surprise import Dataset, Reader, SVD
+    # 🔍 SEARCH PRODUCT
+    st.subheader("🔍 Search Product")
+    keyword = st.text_input("Nhập tên category hoặc product_id")
 
-    user_id = st.text_input("Customer ID")
+    if keyword:
+        search_result = df[
+            df["product_id"].astype(str).str.contains(keyword, case=False)
+        ]
+        st.dataframe(search_result[["product_id","payment_value"]].head(10))
 
-    # =========================
-    # LOAD + PREPARE DATA
-    # =========================
-    data_rec = df[["customer_unique_id", "product_id", "review_score"]].dropna()
+    st.divider()
 
-    # Convert to string (important for Surprise)
+    user_id = st.text_input("Customer ID để recommend")
+
+    data_rec = df[["customer_unique_id","product_id","review_score"]].dropna()
+
     data_rec["customer_unique_id"] = data_rec["customer_unique_id"].astype(str)
     data_rec["product_id"] = data_rec["product_id"].astype(str)
 
-    # =========================
-    # TRAIN MODEL (cache để không train lại mỗi lần reload)
-    # =========================
     @st.cache_resource
-    def train_svd(data):
-        reader = Reader(rating_scale=(1, 5))
-        dataset = Dataset.load_from_df(data, reader)
-        trainset = dataset.build_full_trainset()
+    def train_model(data):
+        X = data[["customer_unique_id","product_id"]]
+        y = data["review_score"]
 
-        model = SVD()
-        model.fit(trainset)
+        X_enc = pd.get_dummies(X)
 
-        return model
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X_enc, y)
 
-    model = train_svd(data_rec)
+        return model, X_enc.columns
 
-    # =========================
-    # RECOMMENDATION LOGIC
-    # =========================
+    model, cols = train_model(data_rec)
+
     if user_id:
+
         user_id = str(user_id)
 
-        # ❗ Cold start
+        # Cold start
         if user_id not in data_rec["customer_unique_id"].unique():
-            st.warning("Cold start → Recommend popular products")
+            st.warning("Cold start → Recommend popular")
 
             popular = (
                 df.groupby("product_id")["review_score"]
@@ -184,8 +188,8 @@ elif menu == "🎯 Recommendation":
             )
 
             st.dataframe(popular)
+
         else:
-            # Products user already bought
             purchased = data_rec[
                 data_rec["customer_unique_id"] == user_id
             ]["product_id"].unique()
@@ -196,13 +200,22 @@ elif menu == "🎯 Recommendation":
 
             for product in all_products:
                 if product not in purchased:
-                    pred = model.predict(user_id, product)
-                    predictions.append((product, pred.est))
 
-            # Top 10
+                    temp = pd.DataFrame({
+                        "customer_unique_id":[user_id],
+                        "product_id":[product]
+                    })
+
+                    temp = pd.get_dummies(temp)
+                    temp = temp.reindex(columns=cols, fill_value=0)
+
+                    pred = model.predict(temp)[0]
+
+                    predictions.append((product, pred))
+
             top_10 = sorted(predictions, key=lambda x: x[1], reverse=True)[:10]
 
-            rec_df = pd.DataFrame(top_10, columns=["product_id", "predicted_rating"])
+            rec_df = pd.DataFrame(top_10, columns=["product_id","predicted_rating"])
 
             st.subheader("Top 10 Recommendations")
             st.dataframe(rec_df)
@@ -240,7 +253,7 @@ elif menu == "🛍️ Market Basket":
         st.error("rules.csv not found")
 
 # =========================
-# PREDICTION (FIX + PROB)
+# PREDICTION
 # =========================
 elif menu == "🔮 Prediction":
 
@@ -272,16 +285,12 @@ elif menu == "🔮 Prediction":
 
         if hasattr(pipeline, "predict_proba"):
             prob = pipeline.predict_proba(input_df)[0][1]
-
-            st.success(f"""
-            Prediction: {pred[0]}
-            Confidence: {prob:.2f}
-            """)
+            st.success(f"Prediction: {pred[0]} | Confidence: {prob:.2f}")
         else:
             st.success(f"Prediction: {pred[0]}")
 
 # =========================
-# ADMIN (FIX IMBALANCE)
+# ADMIN
 # =========================
 elif menu == "⚙️ Admin":
 
@@ -295,7 +304,6 @@ elif menu == "⚙️ Admin":
 
         if st.button("Retrain"):
             try:
-                # BALANCE DATA
                 df_major = new_df[new_df["review_score"] >= 4]
                 df_minor = new_df[new_df["review_score"] < 4]
 
@@ -316,10 +324,7 @@ elif menu == "⚙️ Admin":
                 pipeline.fit(X, y)
                 joblib.dump(pipeline, "pipeline.pkl")
 
-                st.success("Retrained with balanced data!")
-
-                st.write("Label distribution:")
-                st.write(y.value_counts())
+                st.success("Retrained!")
 
             except Exception as e:
                 st.error(e)
