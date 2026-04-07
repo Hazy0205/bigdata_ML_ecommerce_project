@@ -1,30 +1,69 @@
+# =========================
+# IMPORT
+# =========================
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
 
-# ===================== CONFIG =====================
-st.set_page_config(page_title="E-commerce Analytics", layout="wide")
+# =========================
+# CONFIG
+# =========================
+st.set_page_config(
+    page_title="E-commerce Analytics",
+    layout="wide",
+    page_icon="🚀"
+)
 
-# ===================== LOAD DATA =====================
+# =========================
+# STYLE (UI XỊN)
+# =========================
+st.markdown("""
+<style>
+body {
+    background-color: #0E1117;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #1f2937, #111827);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.metric-card h2 {
+    font-size: 28px;
+    margin: 10px 0;
+}
+
+.stButton>button {
+    border-radius: 10px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# LOAD DATA
+# =========================
 @st.cache_data
 def load_data():
     return pd.read_csv("data/cleaned_data_small.csv")
 
-# ===================== HEAD ========================
 df = load_data()
-
-# ===================== SIDEBAR =====================
-st.sidebar.title("📊 Navigation")
-page = st.sidebar.selectbox(
-    "Choose Page",
-    ["Dashboard", "Clustering", "Recommendation", "Market Basket", "Prediction", "Admin"] 
-) 
 
 # =========================
 # SIDEBAR
 # =========================
-st.sidebar.title("📊 MENU")
+st.sidebar.markdown("## 🚀 E-commerce App")
+st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
     "Chọn chức năng",
@@ -36,129 +75,165 @@ menu = st.sidebar.radio(
         "🔮 Prediction",
         "⚙️ Admin"
     ]
-
 )
 
-# ===================== DASHBOARD =====================
-if page == "Dashboard":
+# =========================
+# DASHBOARD
+# =========================
+if menu == "📊 Dashboard":
+
     st.title("📊 E-commerce Dashboard")
 
     col1, col2, col3 = st.columns(3)
 
-    total_orders = len(df)
+    col1.markdown(f"""
+    <div class='metric-card'>
+    <h4>🛒 Orders</h4>
+    <h2>{df.shape[0]}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-    total_revenue = df["Monetary"].sum() if "Monetary" in df.columns else 0
+    col2.markdown(f"""
+    <div class='metric-card'>
+    <h4>👤 Customers</h4>
+    <h2>{df['CustomerID'].nunique() if 'CustomerID' in df.columns else 0}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-    total_customers = df["CustomerID"].nunique() if "CustomerID" in df.columns else 0
+    col3.markdown(f"""
+    <div class='metric-card'>
+    <h4>💰 Revenue</h4>
+    <h2>{df['Monetary'].sum() if 'Monetary' in df.columns else 0:,.0f}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-    col1.metric("🛒 Orders", total_orders)
-    col2.metric("💰 Revenue", f"{total_revenue:,.0f}")
-    col3.metric("👤 Customers", total_customers)
+    st.divider()
 
-    st.subheader("📈 Revenue Distribution")
     if "Monetary" in df.columns:
         fig = px.histogram(df, x="Monetary", nbins=50)
+        fig.update_layout(template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Column 'Monetary' not found!")
 
-# ===================== CLUSTERING =====================
-elif page == "Clustering":
-    st.title("🧠 Customer Segmentation (RFM)")
+# =========================
+# SEGMENTATION
+# =========================
+elif menu == "👥 Segmentation":
+
+    st.title("👥 Customer Segmentation")
 
     if all(col in df.columns for col in ["Recency", "Frequency", "Monetary"]):
+
         X = df[["Recency", "Frequency", "Monetary"]]
 
-        kmeans = KMeans(n_clusters=4, random_state=42)
-        df["Cluster"] = kmeans.fit_predict(X)
+        scaler = MinMaxScaler()
+        X_scaled = scaler.fit_transform(X)
 
-        st.subheader("Cluster Summary")
-        st.dataframe(df.groupby("Cluster")[["Recency", "Frequency", "Monetary"]].mean())
+        k = st.slider("Clusters", 2, 8, 4)
+
+        model = KMeans(n_clusters=k, random_state=42)
+        df["Cluster"] = model.fit_predict(X_scaled)
 
         fig = px.scatter(
             df,
-            x="Recency",
+            x="Frequency",
             y="Monetary",
-            color="Cluster",
-            title="Customer Segments"
+            color="Cluster"
         )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error("Missing RFM columns!")
+        fig.update_layout(template="plotly_dark")
 
-# ===================== PREDICTION =====================
-elif page == "Prediction":
-    st.title("🤖 Customer Prediction")
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.dataframe(df.groupby("Cluster")[["Recency","Frequency","Monetary"]].mean())
+
+    else:
+        st.error("Missing RFM columns")
+
+# =========================
+# RECOMMENDATION
+# =========================
+elif menu == "🎯 Recommendation":
+
+    st.title("🎯 Product Recommendation")
+
+    customer_id = st.text_input("Nhập Customer ID")
+
+    if customer_id:
+        st.markdown("### 🔥 Top Recommendations")
+
+        rec = df.groupby("product_id")["review_score"].mean().sort_values(ascending=False).head(10)
+
+        st.dataframe(rec, use_container_width=True)
+
+# =========================
+# MARKET BASKET
+# =========================
+elif menu == "🛍️ Market Basket":
+
+    st.title("🛍️ Market Basket")
+
+    try:
+        rules = pd.read_csv("data/rules.csv")
+
+        fig = px.scatter(
+            rules,
+            x="support",
+            y="confidence",
+            size="lift",
+            color="lift"
+        )
+        fig.update_layout(template="plotly_dark")
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.dataframe(rules.head(20))
+
+    except:
+        st.warning("rules.csv not found")
+
+# =========================
+# PREDICTION (FAKE MODEL)
+# =========================
+elif menu == "🔮 Prediction":
+
+    st.title("🔮 Customer Prediction")
 
     recency = st.number_input("Recency", 0)
     frequency = st.number_input("Frequency", 0)
     monetary = st.number_input("Monetary", 0)
 
     if st.button("Predict"):
-        if monetary > 1000:
-            st.success("🌟 VIP Customer")
-        elif monetary > 500:
-            st.info("👍 Loyal Customer")
-        else:
-            st.warning("⚠️ Normal Customer")
+        with st.spinner("Predicting..."):
+            if monetary > 1000:
+                st.success("🌟 VIP Customer")
+            elif monetary > 500:
+                st.info("👍 Loyal Customer")
+            else:
+                st.warning("⚠️ Normal Customer")
 
-# ===================== RECOMMENDATION =====================
-elif page == "Recommendation":
-    st.title("🛒 Product Recommendation")
+# =========================
+# ADMIN
+# =========================
+elif menu == "⚙️ Admin":
 
-    customer_id = st.text_input("Enter Customer ID")
+    st.title("⚙️ Admin Panel")
 
-    if st.button("Recommend"):
-        st.subheader("Top Recommended Products")
-        st.write(["Product A", "Product B", "Product C"])
+    st.info("Upload dataset để retrain clustering")
 
-# ===================== FP-GROWTH =====================
-elif page == "Market Basket":
-    st.title("📈 Association Rules")
+    file = st.file_uploader("Upload CSV")
 
-    try:
-        rules = pd.read_csv("data/rules.csv")
-        st.dataframe(rules.head(20))
-    except:
-        st.warning("rules.csv not found!")
-
-# ===================== ADMIN =====================
-elif page == "Admin":
-    st.title("⚙️ Admin Panel - Retrain Model")
-
-    st.subheader("📤 Upload New Dataset")
-
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-
-    if uploaded_file is not None:
-        new_df = pd.read_csv(uploaded_file)
-        st.success("File uploaded successfully!")
+    if file:
+        new_df = pd.read_csv(file)
         st.dataframe(new_df.head())
 
-        if st.button("🔄 Retrain Clustering Model"):
+        if st.button("Retrain"):
             if all(col in new_df.columns for col in ["Recency", "Frequency", "Monetary"]):
-                X = new_df[["Recency", "Frequency", "Monetary"]]
+                X = new_df[["Recency","Frequency","Monetary"]]
 
-                kmeans = KMeans(n_clusters=4, random_state=42)
-                new_df["Cluster"] = kmeans.fit_predict(X)
+                model = KMeans(n_clusters=4, random_state=42)
+                new_df["Cluster"] = model.fit_predict(X)
 
-                st.success("Model retrained successfully!")
+                st.success("Retrain completed!")
 
-                st.subheader("Cluster Summary")
-                st.dataframe(new_df.groupby("Cluster")[["Recency", "Frequency", "Monetary"]].mean())
-
-                fig = px.scatter(
-                    new_df,
-                    x="Recency",
-                    y="Monetary",
-                    color="Cluster",
-                    title="New Clusters"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
+                st.dataframe(new_df.groupby("Cluster")[["Recency","Frequency","Monetary"]].mean())
             else:
-                st.error("Dataset must contain RFM columns!")
-
-# ===================== FOOTER =====================
-st.sidebar.markdown("---")
-st.sidebar.info("Big Data ML Project 🚀")
+                st.error("Missing RFM columns")
