@@ -11,15 +11,16 @@ st.set_page_config(page_title="E-commerce Analytics", layout="wide")
 def load_data():
     return pd.read_csv("data/cleaned_data_small.csv")
 
-<<<<<<< HEAD
+# ===================== HEAD ========================
 df = load_data()
 
 # ===================== SIDEBAR =====================
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.selectbox(
     "Choose Page",
-    ["Dashboard", "Clustering", "Recommendation", "Market Basket", "Prediction", "Admin"]
-=======
+    ["Dashboard", "Clustering", "Recommendation", "Market Basket", "Prediction", "Admin"] 
+) 
+
 # =========================
 # SIDEBAR
 # =========================
@@ -35,7 +36,7 @@ menu = st.sidebar.radio(
         "🔮 Prediction",
         "⚙️ Admin"
     ]
->>>>>>> 5c02638e47d8bbbc7ff62dcc28a0036c6f39592b
+
 )
 
 # ===================== DASHBOARD =====================
@@ -44,15 +45,15 @@ if page == "Dashboard":
 
     col1, col2, col3 = st.columns(3)
 
-  total_orders = len(df)
+    total_orders = len(df)
 
-  total_revenue = df["Monetary"].sum() if "Monetary" in df.columns else 0
+    total_revenue = df["Monetary"].sum() if "Monetary" in df.columns else 0
 
-  total_customers = df["CustomerID"].nunique() if "CustomerID" in df.columns else 0
+    total_customers = df["CustomerID"].nunique() if "CustomerID" in df.columns else 0
 
-  col1.metric("🛒 Orders", total_orders)
-  col2.metric("💰 Revenue", f"{total_revenue:,.0f}")
-  col3.metric("👤 Customers", total_customers)
+    col1.metric("🛒 Orders", total_orders)
+    col2.metric("💰 Revenue", f"{total_revenue:,.0f}")
+    col3.metric("👤 Customers", total_customers)
 
     st.subheader("📈 Revenue Distribution")
     if "Monetary" in df.columns:
