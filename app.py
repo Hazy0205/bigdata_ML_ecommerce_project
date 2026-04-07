@@ -4,7 +4,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import joblib
 import plotly.express as px
+
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 
@@ -18,7 +20,7 @@ st.set_page_config(
 )
 
 # =========================
-# STYLE (UI XỊN)
+# STYLE 
 # =========================
 st.markdown("""
 <style>
@@ -26,20 +28,21 @@ body {
     background-color: #0E1117;
 }
 
+/* Card KPI */
 .metric-card {
     background: linear-gradient(135deg, #1f2937, #111827);
     padding: 20px;
     border-radius: 15px;
     text-align: center;
     color: white;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 
 .metric-card h2 {
     font-size: 28px;
-    margin: 10px 0;
 }
 
+/* Button */
 .stButton>button {
     border-radius: 10px;
     background: linear-gradient(90deg, #6366f1, #8b5cf6);
@@ -47,20 +50,29 @@ body {
     border: none;
 }
 
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #111827;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# LOAD DATA
+# LOAD DATA & PIPELINE 
 # =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv("data/cleaned_data_small.csv")
+    return pd.read_csv("cleaned_data_small.csv")
+
+@st.cache_resource
+def load_pipeline():
+    return joblib.load("pipeline.pkl")
 
 df = load_data()
+pipeline = load_pipeline()
 
 # =========================
-# SIDEBAR
+# SIDEBAR 
 # =========================
 st.sidebar.markdown("## 🚀 E-commerce App")
 st.sidebar.markdown("---")
@@ -78,7 +90,7 @@ menu = st.sidebar.radio(
 )
 
 # =========================
-# DASHBOARD
+# DASHBOARD 
 # =========================
 if menu == "📊 Dashboard":
 
@@ -89,90 +101,106 @@ if menu == "📊 Dashboard":
     col1.markdown(f"""
     <div class='metric-card'>
     <h4>🛒 Orders</h4>
-    <h2>{df.shape[0]}</h2>
+    <h2>{df['order_id'].nunique()}</h2>
     </div>
     """, unsafe_allow_html=True)
 
     col2.markdown(f"""
     <div class='metric-card'>
     <h4>👤 Customers</h4>
-    <h2>{df['CustomerID'].nunique() if 'CustomerID' in df.columns else 0}</h2>
+    <h2>{df['customer_unique_id'].nunique()}</h2>
     </div>
     """, unsafe_allow_html=True)
 
     col3.markdown(f"""
     <div class='metric-card'>
     <h4>💰 Revenue</h4>
-    <h2>{df['Monetary'].sum() if 'Monetary' in df.columns else 0:,.0f}</h2>
+    <h2>${df['payment_value'].sum():,.0f}</h2>
     </div>
     """, unsafe_allow_html=True)
 
     st.divider()
 
-    if "Monetary" in df.columns:
-        fig = px.histogram(df, x="Monetary", nbins=50)
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
+    category_filter = st.selectbox("Chọn Category", df["product_category_name_english"].unique())
+    df_filtered = df[df["product_category_name_english"] == category_filter]
+
+    fig = px.bar(
+        df_filtered.groupby("product_id")["payment_value"].sum().head(10),
+        title="Top Products"
+    )
+    fig.update_layout(template="plotly_dark")
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # =========================
-# SEGMENTATION
+# SEGMENTATION 
 # =========================
 elif menu == "👥 Segmentation":
 
     st.title("👥 Customer Segmentation")
 
-    if all(col in df.columns for col in ["Recency", "Frequency", "Monetary"]):
+    rfm = df.groupby("customer_unique_id").agg({
+        "order_purchase_timestamp": "max",
+        "order_id": "count",
+        "payment_value": "sum"
+    }).reset_index()
 
-        X = df[["Recency", "Frequency", "Monetary"]]
+    rfm.columns = ["customer", "Recency", "Frequency", "Monetary"]
+    rfm["Recency"] = (pd.to_datetime("today") - pd.to_datetime(rfm["Recency"])).dt.days
 
-        scaler = MinMaxScaler()
-        X_scaled = scaler.fit_transform(X)
+    scaler = MinMaxScaler()
+    X = scaler.fit_transform(rfm[["Recency","Frequency","Monetary"]])
 
-        k = st.slider("Clusters", 2, 8, 4)
+    k = st.slider("Clusters", 2, 8, 4)
 
-        model = KMeans(n_clusters=k, random_state=42)
-        df["Cluster"] = model.fit_predict(X_scaled)
+    model = KMeans(n_clusters=k, random_state=42)
+    rfm["cluster"] = model.fit_predict(X)
 
-        fig = px.scatter(
-            df,
-            x="Frequency",
-            y="Monetary",
-            color="Cluster"
-        )
-        fig.update_layout(template="plotly_dark")
+    fig = px.scatter(
+        rfm,
+        x="Frequency",
+        y="Monetary",
+        color="cluster",
+        title="Customer Segmentation"
+    )
+    fig.update_layout(template="plotly_dark")
 
-        st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-        st.dataframe(df.groupby("Cluster")[["Recency","Frequency","Monetary"]].mean())
-
-    else:
-        st.error("Missing RFM columns")
+    st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
 
 # =========================
-# RECOMMENDATION
+# RECOMMENDATION 
 # =========================
 elif menu == "🎯 Recommendation":
 
     st.title("🎯 Product Recommendation")
 
-    customer_id = st.text_input("Nhập Customer ID")
+    user_id = st.text_input("Nhập Customer ID")
 
-    if customer_id:
-        st.markdown("### 🔥 Top Recommendations")
+    if user_id:
 
-        rec = df.groupby("product_id")["review_score"].mean().sort_values(ascending=False).head(10)
+        data = df[["customer_unique_id","product_id","review_score"]].dropna()
 
-        st.dataframe(rec, use_container_width=True)
+        if user_id not in data["customer_unique_id"].astype(str).values:
+            st.warning("Cold start → Recommend popular")
+
+            popular = df.groupby("product_id")["review_score"].count().sort_values(ascending=False).head(10)
+            st.dataframe(popular)
+
+        else:
+            rec = df.groupby("product_id")["review_score"].mean().sort_values(ascending=False).head(10)
+            st.dataframe(rec)
 
 # =========================
-# MARKET BASKET
+# MARKET BASKET 
 # =========================
 elif menu == "🛍️ Market Basket":
 
     st.title("🛍️ Market Basket")
 
     try:
-        rules = pd.read_csv("data/rules.csv")
+        rules = pd.read_csv("rules.csv")
 
         fig = px.scatter(
             rules,
@@ -188,36 +216,50 @@ elif menu == "🛍️ Market Basket":
         st.dataframe(rules.head(20))
 
     except:
-        st.warning("rules.csv not found")
+        st.error("Chưa có rules.csv")
 
 # =========================
-# PREDICTION (FAKE MODEL)
+# PREDICTION 
 # =========================
 elif menu == "🔮 Prediction":
 
-    st.title("🔮 Customer Prediction")
+    st.title("🔮 Predict Customer Satisfaction")
 
-    recency = st.number_input("Recency", 0)
-    frequency = st.number_input("Frequency", 0)
-    monetary = st.number_input("Monetary", 0)
+    col1, col2, col3 = st.columns(3)
+
+    price = col1.number_input("Price", 0.0)
+    freight = col2.number_input("Freight", 0.0)
+    payment = col3.number_input("Payment", 0.0)
+
+    payment_type = st.selectbox("Payment Type", df["payment_type"].unique())
 
     if st.button("Predict"):
+
         with st.spinner("Predicting..."):
-            if monetary > 1000:
-                st.success("🌟 VIP Customer")
-            elif monetary > 500:
-                st.info("👍 Loyal Customer")
+
+            input_df = pd.DataFrame({
+                "price": [price],
+                "freight_value": [freight],
+                "payment_value": [payment],
+                "payment_type": [payment_type]
+            })
+
+            pred = pipeline.predict(input_df)
+
+            if hasattr(pipeline, "predict_proba"):
+                prob = pipeline.predict_proba(input_df)[0][1]
+                st.success(f"Prediction: {pred[0]} | Confidence: {prob:.2f}")
             else:
-                st.warning("⚠️ Normal Customer")
+                st.success(f"Prediction: {pred[0]}")
 
 # =========================
-# ADMIN
+# ADMIN 
 # =========================
 elif menu == "⚙️ Admin":
 
     st.title("⚙️ Admin Panel")
 
-    st.info("Upload dataset để retrain clustering")
+    st.info("Upload dataset mới để retrain model")
 
     file = st.file_uploader("Upload CSV")
 
@@ -226,14 +268,11 @@ elif menu == "⚙️ Admin":
         st.dataframe(new_df.head())
 
         if st.button("Retrain"):
-            if all(col in new_df.columns for col in ["Recency", "Frequency", "Monetary"]):
-                X = new_df[["Recency","Frequency","Monetary"]]
 
-                model = KMeans(n_clusters=4, random_state=42)
-                new_df["Cluster"] = model.fit_predict(X)
+            X = new_df[["price","freight_value","payment_value","payment_type"]]
+            y = new_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
 
-                st.success("Retrain completed!")
+            pipeline.fit(X, y)
+            joblib.dump(pipeline, "pipeline.pkl")
 
-                st.dataframe(new_df.groupby("Cluster")[["Recency","Frequency","Monetary"]].mean())
-            else:
-                st.error("Missing RFM columns")
+            st.success("Model updated!")
