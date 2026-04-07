@@ -4,3 +4,10 @@ numpy
 scikit-learn
 plotly
 joblib
+mlxtend
+implicit
+matplotlib
+seaborn
+openpyxl
+scikit-surprise
+cmake
