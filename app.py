@@ -24,66 +24,30 @@ st.set_page_config(
 # =========================
 st.markdown("""
 <style>
-
-/* Background */
 .main {
     background-color: #f8fafc;
 }
-
-/* Sidebar */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #6366f1, #8b5cf6);
-    color: white;
 }
-
-/* KPI Card */
 .metric-card {
     background: white;
     padding: 20px;
     border-radius: 16px;
     text-align: center;
     box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-    transition: 0.3s;
 }
-
-.metric-card:hover {
-    transform: translateY(-5px);
-}
-
-/* Text */
-h1, h2, h3 {
-    color: #111827;
-}
-
-/* Button */
 .stButton>button {
     border-radius: 10px;
     background: linear-gradient(90deg, #6366f1, #8b5cf6);
     color: white;
     border: none;
-    font-weight: 600;
 }
-
-/* Input */
-.stTextInput input, .stNumberInput input {
-    border-radius: 10px;
-}
-
-/* Table */
-[data-testid="stDataFrame"] {
-    border-radius: 10px;
-}
-
-/* Slider */
-.stSlider > div {
-    color: #6366f1;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# LOAD DATA & PIPELINE
+# LOAD DATA
 # =========================
 @st.cache_data
 def load_data():
@@ -104,11 +68,9 @@ pipeline = load_pipeline()
 # SIDEBAR
 # =========================
 st.sidebar.title("🚀 E-commerce App")
-st.sidebar.markdown("### Analytics Dashboard")
-st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
-    "Chọn chức năng",
+    "Menu",
     [
         "📊 Dashboard",
         "👥 Segmentation",
@@ -124,43 +86,23 @@ menu = st.sidebar.radio(
 # =========================
 if menu == "📊 Dashboard":
 
-    st.title("📊 E-commerce Dashboard")
+    st.title("📊 Dashboard")
 
-    col1, col2, col3 = st.columns(3, gap="large")
+    col1, col2, col3 = st.columns(3)
 
-    col1.markdown(f"""
-    <div class='metric-card'>
-    <h4>🛒 Orders</h4>
-    <h2>{df['order_id'].nunique()}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col2.markdown(f"""
-    <div class='metric-card'>
-    <h4>👤 Customers</h4>
-    <h2>{df['customer_unique_id'].nunique()}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col3.markdown(f"""
-    <div class='metric-card'>
-    <h4>💰 Revenue</h4>
-    <h2>${df['payment_value'].sum():,.0f}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    col1.markdown(f"<div class='metric-card'><h4>Orders</h4><h2>{df['order_id'].nunique()}</h2></div>", unsafe_allow_html=True)
+    col2.markdown(f"<div class='metric-card'><h4>Customers</h4><h2>{df['customer_unique_id'].nunique()}</h2></div>", unsafe_allow_html=True)
+    col3.markdown(f"<div class='metric-card'><h4>Revenue</h4><h2>${df['payment_value'].sum():,.0f}</h2></div>", unsafe_allow_html=True)
 
     st.divider()
 
-    category_filter = st.selectbox("Chọn Category", df["product_category_name_english"].unique())
-    df_filtered = df[df["product_category_name_english"] == category_filter]
+    category = st.selectbox("Category", df["product_category_name_english"].unique())
+    df_filtered = df[df["product_category_name_english"] == category]
 
     fig = px.bar(
         df_filtered.groupby("product_id")["payment_value"].sum().head(10),
-        title="Top Products",
-        color_discrete_sequence=["#6366f1"]
+        title="Top Products"
     )
-    fig.update_layout(template="plotly_white")
-
     st.plotly_chart(fig, use_container_width=True)
 
 # =========================
@@ -187,15 +129,7 @@ elif menu == "👥 Segmentation":
     model = KMeans(n_clusters=k, random_state=42)
     rfm["cluster"] = model.fit_predict(X)
 
-    fig = px.scatter(
-        rfm,
-        x="Frequency",
-        y="Monetary",
-        color="cluster",
-        color_continuous_scale="viridis"
-    )
-    fig.update_layout(template="plotly_white")
-
+    fig = px.scatter(rfm, x="Frequency", y="Monetary", color="cluster")
     st.plotly_chart(fig, use_container_width=True)
 
     st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
@@ -205,16 +139,16 @@ elif menu == "👥 Segmentation":
 # =========================
 elif menu == "🎯 Recommendation":
 
-    st.title("🎯 Product Recommendation")
+    st.title("🎯 Recommendation")
 
-    user_id = st.text_input("Nhập Customer ID")
+    user_id = st.text_input("Customer ID")
 
     if user_id:
 
         data = df[["customer_unique_id","product_id","review_score"]].dropna()
 
         if user_id not in data["customer_unique_id"].astype(str).values:
-            st.warning("Cold start → Recommend popular")
+            st.warning("Cold start → popular products")
 
             popular = df.groupby("product_id")["review_score"].count().sort_values(ascending=False).head(10)
             st.dataframe(popular)
@@ -224,38 +158,49 @@ elif menu == "🎯 Recommendation":
             st.dataframe(rec)
 
 # =========================
-# MARKET BASKET
+# MARKET BASKET (NEW)
 # =========================
 elif menu == "🛍️ Market Basket":
 
-    st.title("🛍️ Market Basket")
+    st.title("🛍️ Market Basket Analysis")
 
     try:
         rules = pd.read_csv("data/rules.csv")
 
+        col1, col2, col3 = st.columns(3)
+
+        min_support = col1.slider("Min Support", 0.0, 1.0, 0.01)
+        min_conf = col2.slider("Min Confidence", 0.0, 1.0, 0.1)
+        min_lift = col3.slider("Min Lift", 0.0, 10.0, 1.0)
+
+        filtered = rules[
+            (rules["support"] >= min_support) &
+            (rules["confidence"] >= min_conf) &
+            (rules["lift"] >= min_lift)
+        ]
+
+        st.write(f"Rules: {len(filtered)}")
+
         fig = px.scatter(
-            rules,
+            filtered,
             x="support",
             y="confidence",
             size="lift",
-            color="lift",
-            color_continuous_scale="plasma"
+            color="lift"
         )
-        fig.update_layout(template="plotly_white")
-
         st.plotly_chart(fig, use_container_width=True)
 
-        st.dataframe(rules.head(20))
+        st.dataframe(filtered.head(20))
 
     except:
-        st.error("Chưa có rules.csv")
+        st.error("rules.csv not found")
 
 # =========================
-# PREDICTION
+# PREDICTION (FIXED)
 # =========================
 elif menu == "🔮 Prediction":
 
-    st.title("🔮 Predict Customer Satisfaction")
+    st.title("🔮 Prediction")
 
     col1, col2, col3 = st.columns(3)
 
@@ -266,29 +211,30 @@ elif menu == "🔮 Prediction":
     payment_type = st.selectbox("Payment Type", df["payment_type"].unique())
 
     if st.button("Predict"):
-        with st.spinner("🔄 Predicting..."):
 
-            input_df = pd.DataFrame({
-                "price": [price],
-                "freight_value": [freight],
-                "payment_value": [payment],
-                "payment_type": [payment_type]
-            })
+        input_df = pd.DataFrame({
+            "price":[price],
+            "freight_value":[freight],
+            "payment_value":[payment],
+            "payment_type":[payment_type]
+        })
 
-            pred = pipeline.predict(input_df)
+        input_df = pd.get_dummies(input_df)
 
-            if hasattr(pipeline, "predict_proba"):
-                prob = pipeline.predict_proba(input_df)[0][1]
-                st.success(f"Prediction: {pred[0]} | Confidence: {prob:.2f}")
-            else:
-                st.success(f"Prediction: {pred[0]}")
+        # FIX column mismatch
+        if hasattr(pipeline, "feature_names_in_"):
+            input_df = input_df.reindex(columns=pipeline.feature_names_in_, fill_value=0)
+
+        pred = pipeline.predict(input_df)
+
+        st.success(f"Prediction: {pred[0]}")
 
 # =========================
 # ADMIN
 # =========================
 elif menu == "⚙️ Admin":
 
-    st.title("⚙️ Admin Panel")
+    st.title("⚙️ Admin")
 
     file = st.file_uploader("Upload CSV")
 
@@ -297,7 +243,6 @@ elif menu == "⚙️ Admin":
         st.dataframe(new_df.head())
 
         if st.button("Retrain"):
-
             try:
                 X = new_df[["price","freight_value","payment_value","payment_type"]]
                 X = pd.get_dummies(X)
@@ -307,7 +252,7 @@ elif menu == "⚙️ Admin":
                 pipeline.fit(X, y)
                 joblib.dump(pipeline, "pipeline.pkl")
 
-                st.success("Model updated!")
+                st.success("Retrained!")
 
             except Exception as e:
                 st.error(e)
