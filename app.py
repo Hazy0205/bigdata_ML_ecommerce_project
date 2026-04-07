@@ -9,6 +9,7 @@ import plotly.express as px
 
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.utils import resample
 
 # =========================
 # CONFIG
@@ -24,9 +25,7 @@ st.set_page_config(
 # =========================
 st.markdown("""
 <style>
-.main {
-    background-color: #f8fafc;
-}
+.main {background-color: #f8fafc;}
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #6366f1, #8b5cf6);
 }
@@ -99,10 +98,7 @@ if menu == "📊 Dashboard":
     category = st.selectbox("Category", df["product_category_name_english"].unique())
     df_filtered = df[df["product_category_name_english"] == category]
 
-    fig = px.bar(
-        df_filtered.groupby("product_id")["payment_value"].sum().head(10),
-        title="Top Products"
-    )
+    fig = px.bar(df_filtered.groupby("product_id")["payment_value"].sum().head(10))
     st.plotly_chart(fig, use_container_width=True)
 
 # =========================
@@ -144,21 +140,18 @@ elif menu == "🎯 Recommendation":
     user_id = st.text_input("Customer ID")
 
     if user_id:
-
         data = df[["customer_unique_id","product_id","review_score"]].dropna()
 
         if user_id not in data["customer_unique_id"].astype(str).values:
             st.warning("Cold start → popular products")
-
             popular = df.groupby("product_id")["review_score"].count().sort_values(ascending=False).head(10)
             st.dataframe(popular)
-
         else:
             rec = df.groupby("product_id")["review_score"].mean().sort_values(ascending=False).head(10)
             st.dataframe(rec)
 
 # =========================
-# MARKET BASKET (NEW)
+# MARKET BASKET
 # =========================
 elif menu == "🛍️ Market Basket":
 
@@ -181,13 +174,7 @@ elif menu == "🛍️ Market Basket":
 
         st.write(f"Rules: {len(filtered)}")
 
-        fig = px.scatter(
-            filtered,
-            x="support",
-            y="confidence",
-            size="lift",
-            color="lift"
-        )
+        fig = px.scatter(filtered, x="support", y="confidence", size="lift", color="lift")
         st.plotly_chart(fig, use_container_width=True)
 
         st.dataframe(filtered.head(20))
@@ -196,7 +183,7 @@ elif menu == "🛍️ Market Basket":
         st.error("rules.csv not found")
 
 # =========================
-# PREDICTION (FIXED)
+# PREDICTION (FIX + PROB)
 # =========================
 elif menu == "🔮 Prediction":
 
@@ -221,16 +208,23 @@ elif menu == "🔮 Prediction":
 
         input_df = pd.get_dummies(input_df)
 
-        # FIX column mismatch
         if hasattr(pipeline, "feature_names_in_"):
             input_df = input_df.reindex(columns=pipeline.feature_names_in_, fill_value=0)
 
         pred = pipeline.predict(input_df)
 
-        st.success(f"Prediction: {pred[0]}")
+        if hasattr(pipeline, "predict_proba"):
+            prob = pipeline.predict_proba(input_df)[0][1]
+
+            st.success(f"""
+            Prediction: {pred[0]}
+            Confidence: {prob:.2f}
+            """)
+        else:
+            st.success(f"Prediction: {pred[0]}")
 
 # =========================
-# ADMIN
+# ADMIN (FIX IMBALANCE)
 # =========================
 elif menu == "⚙️ Admin":
 
@@ -244,15 +238,31 @@ elif menu == "⚙️ Admin":
 
         if st.button("Retrain"):
             try:
-                X = new_df[["price","freight_value","payment_value","payment_type"]]
+                # BALANCE DATA
+                df_major = new_df[new_df["review_score"] >= 4]
+                df_minor = new_df[new_df["review_score"] < 4]
+
+                df_minor_upsampled = resample(
+                    df_minor,
+                    replace=True,
+                    n_samples=len(df_major),
+                    random_state=42
+                )
+
+                balanced_df = pd.concat([df_major, df_minor_upsampled])
+
+                X = balanced_df[["price","freight_value","payment_value","payment_type"]]
                 X = pd.get_dummies(X)
 
-                y = new_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
+                y = balanced_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
 
                 pipeline.fit(X, y)
                 joblib.dump(pipeline, "pipeline.pkl")
 
-                st.success("Retrained!")
+                st.success("Retrained with balanced data!")
+
+                st.write("Label distribution:")
+                st.write(y.value_counts())
 
             except Exception as e:
                 st.error(e)
