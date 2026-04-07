@@ -1,10 +1,13 @@
-# bigdata_ML_ecommerce_project
 # 🛒 E-commerce Analytics - Nhóm 10
 
 Chào mừng bạn đến với kho lưu trữ mã nguồn Đồ án Cuối kỳ môn **Big Data Analytics & Machine Learning**! 🚀
 
 Dự án này là một hệ thống Machine Learning end-to-end nhằm phân tích hành vi khách hàng trong lĩnh vực thương mại điện tử, dựa trên bộ dữ liệu **Brazilian E-Commerce (Olist)**. Ứng dụng được triển khai giao diện trực quan bằng Streamlit, giúp người dùng dễ dàng thao tác và khám phá dữ liệu.
+
 <img width="723" height="177" alt="image" src="https://github.com/user-attachments/assets/4f087a8a-c2cc-42b9-b4c0-3fc61a2c906d" />
+
+<img width="703" height="328" alt="image" src="https://github.com/user-attachments/assets/b549cf7b-16e3-4ae2-abef-49335d943954" />
+
 
 
 ## 🌟 Tính năng nổi bật
