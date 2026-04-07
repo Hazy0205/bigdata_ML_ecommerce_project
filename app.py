@@ -200,8 +200,6 @@ elif menu == "🛍️ Market Basket":
     try:
         rules = pd.read_csv("data/rules.csv")
 
-        st.subheader("⚙️ Filter Rules")
-
         col1, col2, col3 = st.columns(3)
 
         min_support = col1.slider("Min Support", 0.0, 1.0, 0.01)
