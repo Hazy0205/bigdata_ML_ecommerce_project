@@ -285,7 +285,7 @@ elif menu == "🔮 Prediction":
 # =========================
 elif menu == "⚙️ Admin":
 
-    st.title("⚙️ Admin Panel - Retrain Model")
+    st.title("⚙️ Admin Panel")
 
     file = st.file_uploader("Upload CSV")
 
@@ -347,12 +347,4 @@ elif menu == "⚙️ Admin":
             input_df = pd.get_dummies(input_df)
             input_df = input_df.reindex(columns=st.session_state.columns, fill_value=0)
 
-            if st.button("Predict (Admin)"):
-
-                pred = st.session_state.model.predict(input_df)[0]
-                prob = st.session_state.model.predict_proba(input_df)[0][1]
-
-                if pred == 1:
-                    st.success(f"😊 Good | Confidence: {prob:.2f}")
-                else:
-                    st.error(f"😞 Bad | Confidence: {prob:.2f}")
+            
