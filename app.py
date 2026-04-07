@@ -198,7 +198,7 @@ elif menu == "🛍️ Market Basket":
     st.title("🛍️ Market Basket Analysis")
 
     try:
-        rules = pd.read_csv("datarules.csv")
+        rules = pd.read_csv("data/rules.csv")
 
         st.subheader("⚙️ Filter Rules")
 
