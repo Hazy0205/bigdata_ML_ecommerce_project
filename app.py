@@ -191,24 +191,51 @@ elif menu == "🎯 Recommendation":
             st.dataframe(rec_df)
 
 # =========================
-# MARKET BASKET
+# MARKET BASKET (UPGRADE)
 # =========================
 elif menu == "🛍️ Market Basket":
 
-    st.title("🛍️ Market Basket")
+    st.title("🛍️ Market Basket Analysis")
 
     try:
-        rules = pd.read_csv("data/rules.csv")
+        rules = pd.read_csv("datarules.csv")
 
+        st.subheader("⚙️ Filter Rules")
+
+        col1, col2, col3 = st.columns(3)
+
+        min_support = col1.slider("Min Support", 0.0, 1.0, 0.01)
+        min_confidence = col2.slider("Min Confidence", 0.0, 1.0, 0.10)
+        min_lift = col3.slider("Min Lift", 0.0, 10.0, 1.0)
+
+        # FILTER
+        filtered_rules = rules[
+            (rules["support"] >= min_support) &
+            (rules["confidence"] >= min_confidence) &
+            (rules["lift"] >= min_lift)
+        ]
+
+        st.write(f"🔎 Found {len(filtered_rules)} rules")
+
+        # CHART
         st.plotly_chart(
-            px.scatter(rules, x="support", y="confidence", size="lift", color="lift"),
+            px.scatter(
+                filtered_rules,
+                x="support",
+                y="confidence",
+                size="lift",
+                color="lift",
+                hover_data=["antecedents","consequents"],
+                title="Association Rules"
+            ),
             use_container_width=True
         )
 
-        st.dataframe(rules.head(20))
+        # TABLE
+        st.dataframe(filtered_rules.head(20))
 
     except:
-        st.error("Chưa có datarules.csv")
+        st.error("❌ Không tìm thấy file datarules.csv")
 
 # =========================
 # PREDICTION 
