@@ -324,27 +324,6 @@ elif menu == "⚙️ Admin":
 
             st.success("✅ Model retrained successfully!")
 
-        # TEST MODEL
-        if st.session_state.get("model") is not None:
-
-            st.subheader("🔮 Test Model")
-
-            col1, col2, col3 = st.columns(3)
-
-            price = col1.number_input("Price", 0.0)
-            freight = col2.number_input("Freight", 0.0)
-            payment = col3.number_input("Payment", 0.0)
-
-            payment_type = st.selectbox("Payment Type", new_df["payment_type"].dropna().unique())
-
-            input_df = pd.DataFrame({
-                "price": [price],
-                "freight_value": [freight],
-                "payment_value": [payment],
-                "payment_type": [payment_type]
-            })
-
-            input_df = pd.get_dummies(input_df)
-            input_df = input_df.reindex(columns=st.session_state.columns, fill_value=0)
+    
 
             
