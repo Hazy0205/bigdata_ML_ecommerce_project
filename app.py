@@ -82,7 +82,7 @@ hr {
 # =========================
 @st.cache_data
 def load_data():
-    return pd.read_csv("cleaned_data_small.csv")
+    return pd.read_csv("data/cleaned_data_small.csv")
 
 df = load_data()
 
@@ -234,7 +234,7 @@ elif menu == "🛍️ Market Basket":
     st.title("🛍️ Market Basket Analysis")
 
     try:
-        rules = pd.read_csv("rules.csv")
+        rules = pd.read_csv("data/rules.csv")
 
         fig = px.scatter(
             rules,
