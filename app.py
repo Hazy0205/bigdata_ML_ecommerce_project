@@ -131,52 +131,71 @@ elif menu == "👥 Segmentation":
 
     st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
 
+# =========================
+# RECOMMENDATION 
+# =========================
 elif menu == "🎯 Recommendation":
 
     st.title("🎯 Recommendation Product")
 
     # =========================
-    # SEARCH
+    # 🔍 SEARCH PRODUCT
     # =========================
     st.subheader("🔍 Search Product")
 
-    keyword = st.text_input("Nhập product_id")
+    keyword = st.text_input("Nhập product_id để tìm")
 
     if keyword:
-        result = df[df["product_id"].astype(str).str.contains(keyword, case=False)]
+        result = df[
+            df["product_id"].astype(str).str.contains(keyword, case=False)
+        ]
         st.dataframe(result[["product_id","payment_value"]].head(10))
 
     st.divider()
 
     # =========================
-    # INPUT USER
+    # 📥 INPUT USER
     # =========================
     user_id = st.text_input("Customer ID để recommend")
 
+    # =========================
+    # ⚡ LOAD + REDUCE DATA (TRÁNH CRASH)
+    # =========================
     data_rec = df[["customer_unique_id","product_id","review_score"]].dropna()
+
+    # giảm size cho cloud
+    data_rec = data_rec.sample(20000, random_state=42)
+
+    # giữ top product phổ biến
+    top_products = data_rec["product_id"].value_counts().head(100).index
+    data_rec = data_rec[data_rec["product_id"].isin(top_products)]
 
     data_rec["customer_unique_id"] = data_rec["customer_unique_id"].astype(str)
     data_rec["product_id"] = data_rec["product_id"].astype(str)
 
     # =========================
-    # CREATE USER-PRODUCT MATRIX
+    # ⚡ CREATE PIVOT (CACHED)
     # =========================
-    pivot = data_rec.pivot_table(
-        index="customer_unique_id",
-        columns="product_id",
-        values="review_score"
-    ).fillna(0)
+    @st.cache_data
+    def create_pivot(data):
+        return data.pivot_table(
+            index="customer_unique_id",
+            columns="product_id",
+            values="review_score"
+        ).fillna(0)
+
+    pivot = create_pivot(data_rec)
 
     # =========================
-    # RECOMMEND
+    # 🎯 RECOMMENDATION LOGIC
     # =========================
     if user_id:
 
         user_id = str(user_id)
 
-        # Cold start
+        # ❗ Cold start
         if user_id not in pivot.index:
-            st.warning("Cold start → Recommend popular")
+            st.warning("Cold start → Recommend popular products")
 
             popular = (
                 df.groupby("product_id")["review_score"]
@@ -191,25 +210,29 @@ elif menu == "🎯 Recommendation":
         else:
             user_vector = pivot.loc[user_id]
 
-            # tính similarity
+            # tính similarity (nhanh, không crash)
             similarity = pivot.dot(user_vector)
+
+            # bỏ chính user
+            similarity = similarity.drop(index=user_id)
+
+            # lấy top user giống
+            similar_users = similarity.sort_values(ascending=False).head(5).index
+
+            # lấy recommendation
+            rec = pivot.loc[similar_users].mean().sort_values(ascending=False)
 
             # bỏ sản phẩm đã mua
             purchased = user_vector[user_vector > 0].index
+            rec = rec.drop(labels=purchased, errors="ignore")
 
-            similarity = similarity.drop(index=user_id)
-
-            # lấy top sản phẩm từ user tương tự
-            similar_users = similarity.sort_values(ascending=False).head(5).index
-
-            rec = pivot.loc[similar_users].mean().sort_values(ascending=False)
-
-            rec = rec.drop(labels=purchased, errors="ignore").head(10)
+            rec = rec.head(10)
 
             rec_df = rec.reset_index()
             rec_df.columns = ["product_id","score"]
 
-            st.subheader("Top 10 Recommendations")
+            st.success(f"Found {len(rec_df)} recommendations")
+
             st.dataframe(rec_df)
 
 # =========================
