@@ -210,14 +210,148 @@ elif menu == "🛍️ Market Basket":
         st.error("Chưa có datarules.csv")
 
 # =========================
-# ADMIN
+# PREDICTION 
+# =========================
+elif menu == "🔮 Prediction":
+
+    st.title("🔮 Predict Customer Satisfaction")
+
+    # PREPARE DATA
+    df_pred = df[[
+        "price",
+        "freight_value",
+        "payment_value",
+        "payment_type",
+        "review_score"
+    ]].dropna()
+
+    df_pred["target"] = df_pred["review_score"].apply(lambda x: 1 if x >= 4 else 0)
+
+    # ENCODE
+    df_pred = pd.get_dummies(df_pred, columns=["payment_type"], drop_first=True)
+
+    X = df_pred.drop(columns=["review_score", "target"])
+    y = df_pred["target"]
+
+    # TRAIN MODEL
+    from sklearn.ensemble import RandomForestClassifier
+
+    @st.cache_resource
+    def train_model(X, y):
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X, y)
+        return model
+
+    model = train_model(X, y)
+
+    st.success("Model trained successfully!")
+
+    # INPUT
+    col1, col2, col3 = st.columns(3)
+
+    price = col1.number_input("Price", 0.0)
+    freight = col2.number_input("Freight", 0.0)
+    payment = col3.number_input("Payment", 0.0)
+
+    payment_type = st.selectbox("Payment Type", df["payment_type"].dropna().unique())
+
+    # BUILD INPUT
+    input_df = pd.DataFrame({
+        "price": [price],
+        "freight_value": [freight],
+        "payment_value": [payment],
+        "payment_type": [payment_type]
+    })
+
+    input_df = pd.get_dummies(input_df)
+
+    # ALIGN COLUMNS
+    input_df = input_df.reindex(columns=X.columns, fill_value=0)
+
+    # PREDICT
+    if st.button("Predict"):
+
+        pred = model.predict(input_df)[0]
+        prob = model.predict_proba(input_df)[0][1]
+
+        if pred == 1:
+            st.success(f"😊 Good Review (>=4) | Confidence: {prob:.2f}")
+        else:
+            st.error(f"😞 Bad Review (<4) | Confidence: {prob:.2f}")
+
+# =========================
+# ADMIN (RETRAIN MODEL)
 # =========================
 elif menu == "⚙️ Admin":
 
-    st.title("⚙️ Admin Panel")
+    st.title("⚙️ Admin Panel - Retrain Model")
 
     file = st.file_uploader("Upload CSV")
 
     if file:
         new_df = pd.read_csv(file)
         st.dataframe(new_df.head())
+
+        required_cols = ["price","freight_value","payment_value","payment_type","review_score"]
+
+        if not all(col in new_df.columns for col in required_cols):
+            st.error("❌ File thiếu cột cần thiết")
+            st.stop()
+
+        # PREPROCESS
+        df_train = new_df[required_cols].dropna()
+        df_train["target"] = df_train["review_score"].apply(lambda x: 1 if x >= 4 else 0)
+
+        df_train = pd.get_dummies(df_train, columns=["payment_type"], drop_first=True)
+
+        X = df_train.drop(columns=["review_score","target"])
+        y = df_train["target"]
+
+        from sklearn.ensemble import RandomForestClassifier
+
+        # SESSION STATE (lưu model)
+        if "model" not in st.session_state:
+            st.session_state.model = None
+
+        if st.button("🚀 Retrain Model"):
+
+            model = RandomForestClassifier(n_estimators=100, random_state=42)
+            model.fit(X, y)
+
+            st.session_state.model = model
+            st.session_state.columns = X.columns
+
+            st.success("✅ Model retrained successfully!")
+
+        # TEST MODEL
+        if st.session_state.get("model") is not None:
+
+            st.subheader("🔮 Test Model")
+
+            col1, col2, col3 = st.columns(3)
+
+            price = col1.number_input("Price", 0.0)
+            freight = col2.number_input("Freight", 0.0)
+            payment = col3.number_input("Payment", 0.0)
+
+            payment_type = st.selectbox("Payment Type", new_df["payment_type"].dropna().unique())
+
+            input_df = pd.DataFrame({
+                "price": [price],
+                "freight_value": [freight],
+                "payment_value": [payment],
+                "payment_type": [payment_type]
+            })
+
+            input_df = pd.get_dummies(input_df)
+            input_df = input_df.reindex(columns=st.session_state.columns, fill_value=0)
+
+            if st.button("Predict (Admin)"):
+
+                pred = st.session_state.model.predict(input_df)[0]
+                prob = st.session_state.model.predict_proba(input_df)[0][1]
+
+                if pred == 1:
+                    st.success(f"😊 Good | Confidence: {prob:.2f}")
+                else:
+                    st.error(f"😞 Bad | Confidence: {prob:.2f}")
