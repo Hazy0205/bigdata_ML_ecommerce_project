@@ -49,6 +49,7 @@ Hãy đảm bảo bạn đã cài đặt Python. Mở Terminal và chạy lệnh
 Sau khi chạy lệnh trên, trình duyệt sẽ tự động mở trang web tại địa chỉ: http://localhost:8501.
 ```
 ## 📁 Cấu trúc Thư mục
+ Plaintext
 ├── data/
 │   └── cleaned_data_small.csv   # Dữ liệu đã được làm sạch
 ├── models/
