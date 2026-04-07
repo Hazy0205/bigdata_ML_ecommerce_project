@@ -1,0 +1,69 @@
+digraph Olist_ERD {
+	bgcolor=white rankdir=LR
+	node [fontname=Helvetica shape=record style=filled]
+	customers [label="{
+CUSTOMERS |
++ customer_id (PK)\l
+customer_unique_id\l
+customer_zip_code_prefix\l
+customer_city\l
+customer_state\l
+}" fillcolor="#E3F2FD"]
+	orders [label="{
+ORDERS |
++ order_id (PK)\l
+customer_id (FK)\l
+order_status\l
+order_purchase_timestamp\l
+}" fillcolor="#E8F5E9"]
+	order_items [label="{
+ORDER_ITEMS |
+order_id (FK)\l
+product_id (FK)\l
+seller_id (FK)\l
+price\l
+freight_value\l
+}" fillcolor="#FFF3E0"]
+	order_payments [label="{
+ORDER_PAYMENTS |
+order_id (FK)\l
+payment_type\l
+payment_value\l
+}" fillcolor="#FCE4EC"]
+	order_reviews [label="{
+ORDER_REVIEWS |
++ review_id (PK)\l
+order_id (FK)\l
+review_score\l
+}" fillcolor="#F3E5F5"]
+	products [label="{
+PRODUCTS |
++ product_id (PK)\l
+product_category_name\l
+product_weight_g\l
+}" fillcolor="#E0F7FA"]
+	sellers [label="{
+SELLERS |
++ seller_id (PK)\l
+seller_city\l
+seller_state\l
+}" fillcolor="#FFFDE7"]
+	geolocation [label="{
+GEOLOCATION |
+zip_code_prefix\l
+city\l
+state\l
+}" fillcolor="#ECEFF1"]
+	category [label="{
+CATEGORY_TRANSLATION |
+product_category_name\l
+product_category_name_english\l
+}" fillcolor="#F1F8E9"]
+	customers -> orders [label="1:N" color=black]
+	orders -> order_items [label="1:N"]
+	orders -> order_payments [label="1:N"]
+	orders -> order_reviews [label="1:1"]
+	products -> order_items [label="1:N"]
+	sellers -> order_items [label="1:N"]
+	products -> category [label="N:1"]
+}
