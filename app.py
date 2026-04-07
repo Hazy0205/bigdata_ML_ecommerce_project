@@ -4,7 +4,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 import plotly.express as px
 
 from sklearn.cluster import KMeans
@@ -35,18 +34,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# LOAD DATA & PIPELINE
+# LOAD DATA
 # =========================
 @st.cache_data
 def load_data():
     return pd.read_csv("data/cleaned_data_small.csv")
 
-@st.cache_resource
-def load_pipeline():
-    return joblib.load("pipeline.pkl")
-
 df = load_data()
-pipeline = load_pipeline()
 
 # =========================
 # SIDEBAR
@@ -60,7 +54,6 @@ menu = st.sidebar.radio(
         "👥 Segmentation",
         "🎯 Recommendation",
         "🛍️ Market Basket",
-        "🔮 Prediction",
         "⚙️ Admin"
     ]
 )
@@ -80,14 +73,14 @@ if menu == "📊 Dashboard":
 
     st.divider()
 
-    # Filter
-    category_filter = st.selectbox("Chọn Category", df["product_category_name_english"].unique())
+    category_filter = st.selectbox("Chọn Category", df["product_category_name_english"].dropna().unique())
     df_filtered = df[df["product_category_name_english"] == category_filter]
 
-    # Chart
     st.plotly_chart(
-        px.bar(df_filtered.groupby("product_id")["payment_value"].sum().head(10),
-               title="Top Products"),
+        px.bar(
+            df_filtered.groupby("product_id")["payment_value"].sum().sort_values(ascending=False).head(10),
+            title="Top Products"
+        ),
         use_container_width=True
     )
 
@@ -123,7 +116,7 @@ elif menu == "👥 Segmentation":
     st.dataframe(rfm.groupby("cluster")[["Recency","Frequency","Monetary"]].mean())
 
 # =========================
-# RECOMMENDATION (FIX FULL)
+# RECOMMENDATION
 # =========================
 elif menu == "🎯 Recommendation":
 
@@ -146,11 +139,7 @@ elif menu == "🎯 Recommendation":
         st.error("No data for recommendation")
         st.stop()
 
-    # FIX crash
-    data_rec = data_rec.sample(
-        n=min(20000, len(data_rec)),
-        random_state=42
-    )
+    data_rec = data_rec.sample(n=min(20000, len(data_rec)), random_state=42)
 
     top_products = data_rec["product_id"].value_counts().head(100).index
     data_rec = data_rec[data_rec["product_id"].isin(top_products)]
@@ -208,7 +197,7 @@ elif menu == "🛍️ Market Basket":
     st.title("🛍️ Market Basket")
 
     try:
-        rules = pd.read_csv("datarules.csv")
+        rules = pd.read_csv("data/rules.csv")
 
         st.plotly_chart(
             px.scatter(rules, x="support", y="confidence", size="lift", color="lift"),
@@ -218,39 +207,7 @@ elif menu == "🛍️ Market Basket":
         st.dataframe(rules.head(20))
 
     except:
-        st.error("Chưa có rules.csv")
-
-# =========================
-# PREDICTION (PIPELINE)
-# =========================
-elif menu == "🔮 Prediction":
-
-    st.title("🔮 Predict Customer Satisfaction")
-
-    col1, col2, col3 = st.columns(3)
-
-    price = col1.number_input("Price", 0.0)
-    freight = col2.number_input("Freight", 0.0)
-    payment = col3.number_input("Payment", 0.0)
-
-    payment_type = st.selectbox("Payment Type", df["payment_type"].unique())
-
-    if st.button("Predict"):
-
-        input_df = pd.DataFrame({
-            "price": [price],
-            "freight_value": [freight],
-            "payment_value": [payment],
-            "payment_type": [payment_type]
-        })
-
-        pred = pipeline.predict(input_df)
-
-        if hasattr(pipeline, "predict_proba"):
-            prob = pipeline.predict_proba(input_df)[0][1]
-            st.success(f"Prediction: {pred[0]} | Confidence: {prob:.2f}")
-        else:
-            st.success(f"Prediction: {pred[0]}")
+        st.error("Chưa có datarules.csv")
 
 # =========================
 # ADMIN
@@ -264,12 +221,3 @@ elif menu == "⚙️ Admin":
     if file:
         new_df = pd.read_csv(file)
         st.dataframe(new_df.head())
-
-        if st.button("Retrain"):
-            X = new_df[["price","freight_value","payment_value","payment_type"]]
-            y = new_df["review_score"].apply(lambda x: 1 if x >= 4 else 0)
-
-            pipeline.fit(X, y)
-            joblib.dump(pipeline, "pipeline.pkl")
-
-            st.success("Model updated!")
